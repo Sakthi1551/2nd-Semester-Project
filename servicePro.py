@@ -392,6 +392,41 @@ def bookings(prov_id):
         connection.rollback()
         print(f"An error occurred while managing the booking: {e}")
 
+def view_accepted_customer_details(prov_id):
+    print("\n--- Accepted Order Contact List ---")
+    sql_query = """
+    SELECT 
+        u.username AS Customer_Name,
+        u.email AS Customer_Email,
+        o.order_id AS Order_ID,
+        o.booking_date
+    FROM 
+        orders o
+    JOIN 
+        customers u ON o.customer_id = u.cust_id
+    WHERE 
+        o.provider_id = %s 
+        AND o.status = 'Accepted'
+    ORDER BY 
+        o.booking_date ASC;
+    """
+    
+    try:
+        cursor.execute(sql_query, (prov_id,))
+        confirmed_orders = cursor.fetchall()
+
+        if not confirmed_orders:
+            print("You currently have no confirmed (accepted) orders.")
+            print("Check the 'View Pending Requests' menu to accept new bookings.")
+            return
+        
+        headers = ["Customer Name", "Email", "Order ID", "Booking Date"]
+        print(tabulate.tabulate(confirmed_orders, headers=headers, tablefmt="fancy_grid"))
+        
+    except Exception as e:
+        print(f"An error occurred while fetching customer details: {e}")
+        connection.rollback()
+
 def request_termination(prov_id):
     print("-----Request Account Termination-----")
     reason = input("Please explain why you wish to terminate your account (e.g., closing the company): ").strip()
@@ -421,7 +456,7 @@ def provider_interface(provinfo):
         print("Service Provider Overview")
         print("-"*30)
         print(f"Welcome {prov_username} of {prov_compName}")
-        print("1. Add Service \n2. Update Service \n3. Delete Service \n4. View Services \n5. Manage Bookings \n6. Account termination \n7. Exit")
+        print("1. Add Service \n2. Update Service \n3. Delete Service \n4. View Services \n5. Manage Bookings \n6. View Accepted Bookings \n7. Account termination \n8. Exit")
         
         try:
             prov_choice = int(input("Enter your choice: "))
@@ -456,12 +491,18 @@ def provider_interface(provinfo):
             print("Manage Bookings")
             print("-"*30)
             bookings(prov_id)
-        
+
         elif prov_choice == 6:
+            print("-"*30)
+            print("Accepted Bookings Details")
+            print("-"*30)
+            view_accepted_customer_details(prov_id)
+        
+        elif prov_choice == 7:
             if request_termination(prov_id):
                 break
 
-        elif prov_choice == 7:
+        elif prov_choice == 8:
             print("Logging Off!")
             break
 
