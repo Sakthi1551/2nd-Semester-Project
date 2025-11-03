@@ -15,7 +15,7 @@ try:
         host=DB_HOST
     )
     cursor = connection.cursor()
-    print("Successfully connected to PostgreSQL database.")
+    #print("Successfully connected to PostgreSQL database.")
 except Exception as e:
     print(f"Error connecting to the PostgreSQL database: {e}")
     sys.exit(1)

@@ -23,7 +23,7 @@ def setup_database():
             host=DB_HOST
         )
         cursor = connection.cursor()
-        print("Successfully connected to PostgreSQL database.")
+        #print("Successfully connected to PostgreSQL database.")
 
         
         return True

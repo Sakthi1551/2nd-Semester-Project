@@ -3,7 +3,7 @@ from psycopg2 import errors
 import tabulate
 import getpass
 import stdiomask
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import sys
 DB_NAME = "Miniproject"
 DB_USER = "postgres"
@@ -17,41 +17,42 @@ try:
         host=DB_HOST
     )
     cursor = connection.cursor()
-    print("Successfully connected to PostgreSQL database.")
+    #print("Successfully connected to PostgreSQL database.")
 
 except Exception as e:
     print(f"Error connecting to the PostgreSQL database: {e}")
     sys.exit(1)
 
 cursor.execute("""CREATE TABLE IF NOT EXISTS customers(
-               cust_id SERIAL PRIMARY KEY, -- Changed from INTEGER PRIMARY KEY AUTOINCREMENT
+               cust_id SERIAL PRIMARY KEY, 
                username TEXT UNIQUE NOT NULL,
                password TEXT NOT NULL,
                email TEXT NOT NULL
                )""")
 
 cursor.execute("""CREATE TABLE IF NOT EXISTS orders(
-               order_id SERIAL PRIMARY KEY, -- Changed from INTEGER PRIMARY KEY AUTOINCREMENT
+               order_id SERIAL PRIMARY KEY, 
                customer_id INTEGER NOT NULL,
                serv_id INTEGER NOT NULL,
                provider_id INTEGER NOT NULL,
                booking_date TEXT NOT NULL,
                status TEXT NOT NULL DEFAULT 'Pending',
-               FOREIGN KEY(customer_id) REFERENCES customers(cust_id),
-               FOREIGN KEY(serv_id) REFERENCES services(service_id),
-               FOREIGN KEY(provider_id) REFERENCES providers(id)
+               FOREIGN KEY(customer_id) REFERENCES customers(cust_id) ON DELETE CASCADE,
+               FOREIGN KEY(serv_id) REFERENCES services(service_id) ON DELETE CASCADE,
+               FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
                )""")
 
 cursor.execute("""CREATE TABLE IF NOT EXISTS reviews(
-               review_id SERIAL PRIMARY KEY, -- Changed from INTEGER PRIMARY KEY AUTOINCREMENT
+               review_id SERIAL PRIMARY KEY, 
                customer_id INTEGER NOT NULL,
                service_id INTEGER NOT NULL,
                rating INTEGER NOT NULL,
                review_text TEXT,
                review_date TEXT NOT NULL,
-               FOREIGN KEY(customer_id) REFERENCES customers(cust_id),
-               FOREIGN KEY(service_id) REFERENCES services(service_id)
+               FOREIGN KEY(customer_id) REFERENCES customers(cust_id) ON DELETE CASCADE,
+               FOREIGN KEY(service_id) REFERENCES services(service_id) ON DELETE CASCADE
                )""")
+
 
 connection.commit()
 
@@ -164,7 +165,7 @@ def service_view():
                 if min_price > max_price:
                     print("The min price is greater than the max price, try again!")
                 else:
-                    cursor.execute("SELECT service_id,category,location,min_price || ' - ' || max_price AS price_range,avg_rating as Rating,provider_id FROM services WHERE min_price <= %s AND max_price >= %s",(min_price,max_price))
+                    cursor.execute("SELECT service_id,category,location,min_price || ' - ' || max_price AS price_range,avg_rating as Rating,provider_id FROM services WHERE (min_price BETWEEN %s AND %s) OR (max_price BETWEEN %s AND %s)",(min_price,max_price,min_price,max_price))
                     search_res = cursor.fetchall()
                     if search_res:
                         print(tabulate.tabulate(search_res,headers=["Service_ID","Category","Location","Price Range","Rating","Provider_ID"],tablefmt="pretty"))
@@ -211,31 +212,68 @@ def service_book(user_id):
     else:
         print(tabulate.tabulate(values,headers=["Service_ID","Category","Location","Price Range","Rating","Provider_ID"],tablefmt="pretty"))
     
-    try:
-        service_id = int(input("\nEnter the Service ID you wish to book: ").strip())
-        cursor.execute("SELECT provider_id FROM services WHERE service_id = %s", (service_id,))
-        service_info = cursor.fetchone()
+    service_id = None
+    while service_id is None:
+        try:
+            service_id_input = input("\nEnter the Service ID you wish to book: ").strip()
+            if not service_id_input:
+                print("Service ID cannot be empty.")
+                continue
+            service_id = int(service_id_input)
+            
+            cursor.execute("SELECT provider_id FROM services WHERE service_id = %s", (service_id,))
+            service_info = cursor.fetchone()
 
-        if not service_info:
-            print("Error: Service not found.")
+            if not service_info:
+                print(f"Error: Service ID {service_id} not found. Please try again.")
+                service_id = None 
+                continue
+                
+            provider_id = service_info[0]
+
+        except ValueError:
+            print("Invalid input. Please enter a numerical Service ID.")
+            service_id = None
+        except Exception as e:
+            print(f"An unexpected error occurred during service lookup: {e}")
             return
 
-        provider_id = service_info[0]
+    booking_date_str = None
+    booking_date_obj = None
+    today = date.today()
+
+    minimum_booking_date = today + timedelta(days=14)
+
+    while booking_date_obj is None:
+        booking_date_str = input(f"Enter the booking date (YYYY-MM-DD): ").strip()
         
-        booking_date = input("Enter the booking date (YYYY-MM-DD): ").strip()
+        try:
+            booking_date_obj = datetime.strptime(booking_date_str, "%Y-%m-%d").date()
+            
+            if booking_date_obj < today:
+                print("Error: The booking date cannot be in the past.")
+                booking_date_obj = None 
+            
+            elif booking_date_obj < minimum_booking_date:
+                print(f"Error: The booking date must be at least 14 days in advance. Please choose a date on or after {minimum_booking_date.strftime('%Y-%m-%d')}.")
+                booking_date_obj = None 
+
+        except ValueError:
+            print("Error: Invalid date format. Please use YYYY-MM-DD.")
+            booking_date_obj = None 
+
+    try:
         cursor.execute(
             "INSERT INTO orders(customer_id, serv_id, provider_id, booking_date) VALUES(%s, %s, %s, %s)",
-            (userID, service_id, provider_id, booking_date)
+            (userID, service_id, provider_id, booking_date_str)
         )
         connection.commit()
-        print("\nBooking created successfully!")
+        print("\nBooking created successfully! The provider will review your request shortly.")
 
-    except ValueError:
-        connection.rollback()
-        print("Invalid input. Please enter a numerical Service ID.")
     except Exception as e:
         connection.rollback()
-        print(f"An error occurred while booking the service: {e}")
+        print(f"A database error occurred while completing the booking: {e}")
+
 
 
 def leave_review(customer_id):

@@ -20,7 +20,7 @@ try:
         host=DB_HOST
     )
     cursor = connection.cursor()
-    print("Successfully connected to PostgreSQL database.")
+    #print("Successfully connected to PostgreSQL database.")
 
 except Exception as e:
     print(f"Error connecting to the PostgreSQL database: {e}")
@@ -46,7 +46,7 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS services(
              max_price FLOAT NOT NULL,
              avg_rating REAL DEFAULT 3.0 NOT NULL,
              provider_id INTEGER NOT NULL,
-             FOREIGN KEY(provider_id) REFERENCES providers(id)
+             FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
              )"""
 )
 cursor.execute("""
@@ -71,7 +71,6 @@ cursor.execute("""
     )
 """)
 
-cursor.execute("UPDATE services SET avg_rating=3 WHERE avg_rating = 0")
 connection.commit()
 
 def register():
@@ -82,7 +81,13 @@ def register():
     password = stdiomask.getpass("Enter your password: ")
     comp_name = input("Enter your Company Name: ")
     social_id = input("Enter your Social Media Page(With Platform)/Website: ")
-    contact_num = input("Enter your Contact info: ")
+
+    while True:
+        contact_num = input("Enter your Contact info: ")
+        if contact_num.isdigit() and len(contact_num) == 10:
+            break  
+        else:
+            print("Error: Contact number must be exactly 10 digits and contain only numbers. Please try again.")
 
     try:
         cursor.execute(
